@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Text;
 
@@ -9,6 +10,21 @@ namespace SharpADS
 {
     public static class AdsFile
     {
+        public static bool IsSupported(string path)
+        {
+            if (path == null) throw new ArgumentNullException("path");
+            string root = Path.GetPathRoot(path);
+            if (string.IsNullOrEmpty(root))
+                throw new ArgumentException("path must be a volume name or an absolute path");
+
+            int dummy;
+            Interop.FileSystemFlags flags;
+            if (!Interop.GetVolumeInformation(root, null, 0, out dummy, out dummy, out flags, null, 0))
+                throw Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error());
+
+            return flags.HasFlag(Interop.FileSystemFlags.SupportsNamedStreams);
+        }
+
         #region Stream creation
 
         public static AdsFileStream Open(string path, string streamName, FileMode mode)
@@ -189,6 +205,9 @@ namespace SharpADS
 
         public static bool Exists(string path, string streamName)
         {
+            // NOTE: relying on exceptions will severely impede performance
+            // TODO: implement a faster existence check not relying on exceptions
+
             try
             {
                 using (OpenRead(path, streamName))
